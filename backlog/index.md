@@ -7,9 +7,9 @@
 
 | ID | Titre | Type | Prio | Statut | Dépend de |
 |----|-------|------|------|--------|-----------|
-| [ITEM-001](items/ITEM-001.md) | Fondation d'authentification (Better Auth + Prisma) | feature | P0 | todo | — |
-| [ITEM-002](items/ITEM-002.md) | Page d'enregistrement (sign-up self-service) | feature | P0 | todo | ITEM-001 |
-| [ITEM-003](items/ITEM-003.md) | Page de login | feature | P0 | todo | ITEM-001 |
+| [ITEM-001](items/ITEM-001.md) | Fondation d'authentification (Better Auth + Prisma) | feature | P0 | verified | — |
+| [ITEM-002](items/ITEM-002.md) | Page d'enregistrement (sign-up self-service) | feature | P0 | verified | ITEM-001 |
+| [ITEM-003](items/ITEM-003.md) | Page de login | feature | P0 | verified | ITEM-001 |
 | [ITEM-005](items/ITEM-005.md) | Envoi d'e-mails transactionnels (Resend) | feature | P1 | todo | ITEM-001 |
 | [ITEM-006](items/ITEM-006.md) | Rôles (user/admin) et contrôle d'accès | feature | P1 | todo | ITEM-001 |
 | [ITEM-004](items/ITEM-004.md) | Réinitialisation du mot de passe | feature | P1 | todo | ITEM-001, ITEM-005 |

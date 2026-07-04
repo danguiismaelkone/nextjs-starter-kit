@@ -40,7 +40,32 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 shadcn ui
 prisma
+better-auth
 
 
 ### Prisma setup
 https://ethanmick.com/how-to-set-up-prisma-with-next-js-postgres/
+
+Prisma 7 connects through a driver adapter (`@prisma/adapter-pg`); see
+`lib/prisma.ts`. The connection string is read from `DATABASE_URL` (used both at
+runtime and by Prisma Migrate via `prisma.config.ts`).
+
+### Authentication (Better Auth)
+
+Email/password auth is wired with [Better Auth](https://www.better-auth.com/)
+and the Prisma adapter.
+
+- Server config & `getSession()` helper: `lib/auth.ts`
+- Browser client: `lib/auth-client.ts`
+- API route handler: `app/api/auth/[...all]/route.ts`
+
+Required environment variables (see `.env`):
+
+```bash
+DATABASE_URL=                 # PostgreSQL connection string
+BETTER_AUTH_SECRET=           # session/token signing secret — openssl rand -base64 32
+BETTER_AUTH_URL=              # app base URL, e.g. http://localhost:3000
+NEXT_PUBLIC_BETTER_AUTH_URL=  # base URL exposed to the browser auth client
+```
+
+Run migrations after cloning: `npx prisma migrate dev`.
