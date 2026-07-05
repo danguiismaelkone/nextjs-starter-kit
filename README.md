@@ -69,3 +69,47 @@ NEXT_PUBLIC_BETTER_AUTH_URL=  # base URL exposed to the browser auth client
 ```
 
 Run migrations after cloning: `npx prisma migrate dev`.
+
+### Roles & access control
+
+Each user has a `role` (`user` by default, or `admin`), exposed in the session
+on both the server and the client. Admin areas are gated by reusable helpers in
+`lib/authorization.ts`:
+
+- `requireAdmin()` — for Server Components / pages: redirects to `/login` when
+  anonymous, or `/dashboard` when authenticated but not an admin.
+- `requireAdminOrThrow()` — for Route Handlers / Server Actions: throws an
+  `AuthorizationError` (`401`/`403`) instead of redirecting.
+- `requireAuth()`, `getCurrentUser()`, `isAdmin()` — supporting helpers.
+
+`/admin` is an example page protected by `requireAdmin()`.
+
+**Bootstrap the first admin:** sign the user up through the normal flow, then
+promote them once:
+
+```bash
+pnpm promote-admin user@example.com
+# or: ADMIN_EMAIL=user@example.com pnpm promote-admin
+```
+
+Roles cannot be self-assigned at sign-up (`input: false` in `lib/auth.ts`).
+
+### Transactional e-mail (Resend)
+
+Transactional e-mails (password reset, invitations) go through a small service
+in `lib/email.ts`: a generic `sendEmail()` plus dedicated helpers
+`sendPasswordResetEmail()` and `sendInvitationEmail()`.
+
+- **Dev fallback:** if `RESEND_API_KEY` is unset, e-mails are logged to the
+  console (with the link) instead of being sent — no Resend account needed
+  locally.
+- Send failures are caught and logged; they never throw, so a failed e-mail
+  won't crash the calling flow.
+
+Required environment variables (see `.env`):
+
+```bash
+RESEND_API_KEY=   # Resend API key; empty ⇒ dev fallback (console log)
+EMAIL_FROM=       # sender address (verified Resend domain in prod);
+                  # defaults to onboarding@resend.dev
+```

@@ -21,6 +21,14 @@ model User {
   email         String    @unique
   emailVerified Boolean   @default(false)
   image         String?
+  // Application role: "user" (default) or "admin". Gates admin-only areas
+  // (see lib/authorization.ts). Kept as a plain string to stay simple —
+  // fine-grained RBAC is intentionally out of scope (ITEM-006).
+  role          String    @default("user")
+  // When set, the account is disabled (reversible): the user keeps existing
+  // in the DB but is denied access — see getCurrentUser() in lib/authorization.ts.
+  // Preferred over physical deletion so an admin can re-enable it (ITEM-007).
+  disabledAt    DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   sessions      Session[]
@@ -60,6 +68,29 @@ model Account {
   updatedAt             DateTime  @updatedAt
 
   @@map("account")
+}
+
+// ─── Application: user invitations (ITEM-008) ───────────────────────────────
+// Custom table (not the Better Auth org plugin — single space, no teams).
+// Reset-like tokenized flow: an admin creates a `pending` invitation, the
+// invitee opens /invite/accept?token=… to set a password and join.
+
+model Invitation {
+  id         String    @id
+  email      String
+  role       String    @default("user")
+  token      String    @unique
+  // pending → accepted | revoked (expired is derived from `expiresAt`).
+  status     String    @default("pending")
+  expiresAt  DateTime
+  // Id of the admin who sent it (no FK: kept even if that admin is removed).
+  invitedBy  String?
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([email])
+  @@map("invitation")
 }
 
 model Verification {
