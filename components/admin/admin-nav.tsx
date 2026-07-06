@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Mail, Users, type LucideIcon } from "lucide-react"
+import { LayoutDashboard, Users, type LucideIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -14,8 +14,8 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/admin", label: "Tableau de bord", icon: LayoutDashboard },
+  // Users & Invitations share one page with tabs (ITEM-015), so a single entry.
   { href: "/admin/users", label: "Utilisateurs", icon: Users },
-  { href: "/admin/users/invitations", label: "Invitations", icon: Mail },
 ]
 
 /** A nav item matches a route when it equals it or is a path prefix of it. */
@@ -25,8 +25,8 @@ function matchesRoute(pathname: string, href: string): boolean {
 
 /**
  * Shared admin navigation (sidebar + mobile drawer). The active item is the one
- * whose href is the *longest* matching prefix of the current route, so e.g.
- * `/admin/users/invitations` highlights « Invitations » and not « Utilisateurs ».
+ * whose href is the *longest* matching prefix of the current route, so nested
+ * routes (e.g. `/admin/users/new`) still highlight their parent entry.
  */
 export function AdminNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()

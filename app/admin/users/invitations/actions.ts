@@ -20,7 +20,9 @@ import { sendInvitationEmail } from "@/lib/email";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
-const INVITATIONS_PATH = "/admin/users/invitations";
+// Invitations now live under the Users page (Invitations tab, ITEM-015), so that
+// is the route to revalidate after a mutation.
+const INVITATIONS_PATH = "/admin/users";
 
 function forbidden(error: unknown): ActionResult | null {
   if (error instanceof AuthorizationError) {

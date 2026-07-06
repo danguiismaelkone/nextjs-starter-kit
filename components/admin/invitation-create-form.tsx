@@ -11,7 +11,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 
-export function InvitationCreateForm() {
+export function InvitationCreateForm({
+  onSuccess,
+  onCancel,
+}: {
+  /** Called after a successful invitation (e.g. close a modal). Without it, the
+   *  form shows an inline "Invitation envoyée." confirmation instead. */
+  onSuccess?: () => void
+  /** Called when the user cancels (e.g. close a modal). */
+  onCancel?: () => void
+} = {}) {
   const router = useRouter()
   const [email, setEmail] = React.useState("")
   const [role, setRole] = React.useState<Role>("user")
@@ -40,7 +49,11 @@ export function InvitationCreateForm() {
 
     setEmail("")
     setRole("user")
-    setMessage("Invitation envoyée.")
+    if (onSuccess) {
+      onSuccess()
+    } else {
+      setMessage("Invitation envoyée.")
+    }
     router.refresh()
   }
 
@@ -91,10 +104,20 @@ export function InvitationCreateForm() {
         </Select>
       </div>
 
-      <div>
+      <div className="flex gap-2">
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? "Envoi…" : "Inviter"}
         </Button>
+        {onCancel ? (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isSubmitting}
+            onClick={onCancel}
+          >
+            Annuler
+          </Button>
+        ) : null}
       </div>
     </form>
   )

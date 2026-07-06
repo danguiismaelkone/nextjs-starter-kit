@@ -93,6 +93,11 @@ export type DataTableProps<T> = {
   title?: string
   createHref?: string
   createLabel?: string
+  /**
+   * Custom create action rendered in the toolbar (e.g. a modal trigger).
+   * Takes precedence over `createHref`/`createLabel` when provided.
+   */
+  createSlot?: ReactNode
   onImport?: (rows: Record<string, string>[]) => void
 
   // Empty state

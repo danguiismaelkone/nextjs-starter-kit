@@ -11,6 +11,7 @@ import {
 import { invitationInvalidReason } from "@/lib/invitation"
 import { DataTable } from "@/components/data-table"
 import type { ColumnDef, RowAction } from "@/components/data-table"
+import { InvitationCreateDialog } from "@/components/admin/invitation-create-dialog"
 
 /** Raw invitation shape passed from the server page. */
 export type AdminInvitation = {
@@ -163,6 +164,7 @@ export function InvitationsTable({
       data={rows}
       rowKey="id"
       actions={actions}
+      createSlot={<InvitationCreateDialog />}
       defaultPageSize={10}
       emptyState={{
         title: "Aucune invitation",

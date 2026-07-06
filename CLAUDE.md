@@ -1,5 +1,6 @@
 # nextjs-starter-kit
 
+<!-- coding-standards:begin -->
 ## Coding standards (source unique, partagée entre projets)
 
 Les conventions de code de l'équipe vivent dans `~/.claude/standards/` et sont importées ici.
@@ -10,6 +11,7 @@ Ne pas les redéfinir dans ce fichier : les modifier à la source.
 @~/.claude/standards/nextjs.md
 @~/.claude/standards/styling.md
 @~/.claude/standards/git.md
+<!-- coding-standards:end -->
 
 ## Stack de ce projet
 

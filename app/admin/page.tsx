@@ -100,13 +100,13 @@ export default async function AdminPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
             <Button asChild>
-              <Link href="/admin/users/new">
+              <Link href="/admin/users?new=1">
                 <UserPlus className="size-4" />
                 Nouvel utilisateur
               </Link>
             </Button>
             <Button variant="outline" asChild>
-              <Link href="/admin/users/invitations">
+              <Link href="/admin/users?tab=invitations">
                 <Mail className="size-4" />
                 Inviter
               </Link>

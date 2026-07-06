@@ -1,48 +1,60 @@
 import type { Metadata } from "next"
-import Link from "next/link"
 
 import { requireAdmin } from "@/lib/authorization"
 import { prisma } from "@/lib/prisma"
-import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/admin/page-header"
-import { UsersTable } from "@/components/admin/users-columns"
+import { UsersTabs } from "@/components/admin/users-tabs"
 
 export const metadata: Metadata = {
   title: "Utilisateurs",
-  description: "Gestion des comptes utilisateurs.",
+  description: "Gestion des comptes utilisateurs et des invitations.",
 }
 
 export default async function AdminUsersPage() {
   const admin = await requireAdmin()
 
-  // Client-side DataTable handles search / sort / filter / pagination, so the
-  // full (bounded) set is fetched. Fine for the modest admin user base; switch
-  // the table to `serverSide` if this ever needs to scale.
-  const users = await prisma.user.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 500,
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      disabledAt: true,
-      createdAt: true,
-    },
-  })
+  // Both lists are fetched here: the page hosts the Utilisateurs and Invitations
+  // tabs (ITEM-015). Client-side DataTables handle search/sort/filter/pagination,
+  // so the full (bounded) sets are fetched — fine for the modest admin base.
+  const [users, invitations] = await Promise.all([
+    prisma.user.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 500,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        disabledAt: true,
+        createdAt: true,
+      },
+    }),
+    // Pending first, then most recent activity. Accepted/revoked kept for history.
+    prisma.invitation.findMany({
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+      take: 200,
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        status: true,
+        expiresAt: true,
+        createdAt: true,
+      },
+    }),
+  ])
 
   return (
     <main className="mx-auto w-full max-w-5xl p-6">
       <PageHeader
         title="Utilisateurs"
-        description={`${users.length} compte${users.length > 1 ? "s" : ""} au total.`}
-        actions={
-          <Button variant="outline" asChild>
-            <Link href="/admin/users/invitations">Invitations</Link>
-          </Button>
-        }
+        description="Gérez les comptes et les invitations depuis les onglets ci-dessous."
       />
-      <UsersTable users={users} currentUserId={admin.id} />
+      <UsersTabs
+        users={users}
+        invitations={invitations}
+        currentUserId={admin.id}
+      />
     </main>
   )
 }

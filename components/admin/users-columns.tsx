@@ -7,6 +7,7 @@ import { Ban, Pencil, RotateCcw } from "lucide-react"
 import { setUserDisabled } from "@/app/admin/users/actions"
 import { DataTable } from "@/components/data-table"
 import type { ColumnDef, RowAction } from "@/components/data-table"
+import { UserCreateDialog } from "@/components/admin/user-create-dialog"
 
 /** Raw user shape passed from the server page. */
 export type AdminUser = {
@@ -135,8 +136,7 @@ export function UsersTable({
       rowKey="id"
       actions={actions}
       onRowClick={(row) => router.push(`/admin/users/${row.id}`)}
-      createHref="/admin/users/new"
-      createLabel="Nouvel utilisateur"
+      createSlot={<UserCreateDialog />}
       defaultPageSize={10}
       emptyState={{
         title: "Aucun utilisateur",

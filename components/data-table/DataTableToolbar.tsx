@@ -33,6 +33,7 @@ export function DataTableToolbar<T>({
   onResetFilters,
   createHref,
   createLabel,
+  createSlot,
   onExport,
   onImportClick,
   selectedRows,
@@ -49,6 +50,7 @@ export function DataTableToolbar<T>({
   onResetFilters: () => void
   createHref?: string
   createLabel?: string
+  createSlot?: React.ReactNode
   onExport: () => void
   onImportClick?: () => void
   selectedRows: T[]
@@ -118,14 +120,15 @@ export function DataTableToolbar<T>({
             </Button>
           ) : null}
 
-          {createHref ? (
-            <Button size="sm" asChild>
-              <Link href={createHref}>
-                <Plus />
-                {createLabel ?? "Ajouter"}
-              </Link>
-            </Button>
-          ) : null}
+          {createSlot ??
+            (createHref ? (
+              <Button size="sm" asChild>
+                <Link href={createHref}>
+                  <Plus />
+                  {createLabel ?? "Ajouter"}
+                </Link>
+              </Button>
+            ) : null)}
         </div>
       </div>
 

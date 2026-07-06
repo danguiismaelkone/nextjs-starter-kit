@@ -19,6 +19,9 @@
 | [ITEM-010](items/ITEM-010.md) | Tableau de bord d'administration (stats) | feature | P1 | verified | ITEM-009, ITEM-007, ITEM-008 |
 | [ITEM-012](items/ITEM-012.md) | Adopter le module DataTable (listes Utilisateurs & Invitations) | feature | P2 | verified | ITEM-007, ITEM-008 |
 | [ITEM-011](items/ITEM-011.md) | Refonte des en-têtes & formulaires admin | feature | P2 | verified | ITEM-009, ITEM-007, ITEM-008 |
+| [ITEM-015](items/ITEM-015.md) | Unifier Utilisateurs & Invitations en une page à onglets | feature | P2 | verified | ITEM-007, ITEM-008, ITEM-009, ITEM-012 |
+| [ITEM-013](items/ITEM-013.md) | Créer un utilisateur dans une modale | feature | P2 | verified | ITEM-007, ITEM-011, ITEM-012 |
+| [ITEM-014](items/ITEM-014.md) | Inviter un utilisateur dans une modale | feature | P2 | verified | ITEM-008, ITEM-011, ITEM-012, ITEM-015 |
 
 ## Prochaines actions suggérées
 > Auth & user-management (ITEM-001 → 008) : **verified**. Reste à passer par `/backlog-test` pour les preuves d'exécution.
@@ -28,3 +31,8 @@ Refonte « vraie page admin » (nouveau lot) — respecter les dépendances :
 2. `/backlog-implement ITEM-010` (tableau de bord + statistiques, dans le shell)
 3. `/backlog-implement ITEM-012` (listes via le module DataTable — tri/filtres/pagination/badges)
 4. `/backlog-implement ITEM-011` (en-têtes de page + formulaires ; le tableau est couvert par 012)
+
+Refonte navigation & formulaires (nouveau lot, socle 011 & 012 déjà `verified`) :
+5. `/backlog-implement ITEM-015` (fusion en page à onglets Utilisateurs/Invitations) ← à faire avant 014
+6. `/backlog-implement ITEM-013` (création d'utilisateur en modale depuis l'onglet Utilisateurs)
+7. `/backlog-implement ITEM-014` (invitation en modale dans l'onglet Invitations — aligner l'ergonomie sur 013)

@@ -28,6 +28,7 @@ export function DataTable<T>({
   title,
   createHref,
   createLabel,
+  createSlot,
   onImport,
   emptyState,
   defaultPageSize = 25,
@@ -171,6 +172,7 @@ export function DataTable<T>({
         }}
         createHref={createHref}
         createLabel={createLabel}
+        createSlot={createSlot}
         onExport={handleExport}
         onImportClick={onImport ? () => fileInputRef.current?.click() : undefined}
         selectedRows={selectedRows}

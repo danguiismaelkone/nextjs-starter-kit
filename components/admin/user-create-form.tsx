@@ -15,7 +15,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 
-export function UserCreateForm() {
+export function UserCreateForm({
+  onSuccess,
+  onCancel,
+}: {
+  /** Called after a successful creation (e.g. close a modal). Defaults to
+   *  navigating back to the users list. */
+  onSuccess?: () => void
+  /** Called when the user cancels. Defaults to navigating to the users list. */
+  onCancel?: () => void
+} = {}) {
   const router = useRouter()
   const [name, setName] = React.useState("")
   const [email, setEmail] = React.useState("")
@@ -48,7 +57,11 @@ export function UserCreateForm() {
       return
     }
 
-    router.push("/admin/users")
+    if (onSuccess) {
+      onSuccess()
+    } else {
+      router.push("/admin/users")
+    }
     router.refresh()
   }
 
@@ -143,7 +156,7 @@ export function UserCreateForm() {
           type="button"
           variant="outline"
           disabled={isSubmitting}
-          onClick={() => router.push("/admin/users")}
+          onClick={() => (onCancel ? onCancel() : router.push("/admin/users"))}
         >
           Annuler
         </Button>
