@@ -1,0 +1,121 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: nextjs_starter_kit
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Stockage S3-compatible pour le développement local (ITEM-027) — en
+  # production, pointer `S3_ENDPOINT` vers R2/S3 au lieu de ce service.
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000" # API S3
+      - "9001:9001" # Console web
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Applique les migrations avant que `app` ne démarre (ITEM-064) — conteneur
+  # à usage unique (pas de `restart`), basé sur l'étape `builder` du Dockerfile
+  # (seule à contenir la CLI Prisma complète ; l'image finale de `app` ne
+  # l'embarque pas, voir Dockerfile). Évite toute migration concurrente si
+  # `app` scale un jour à plusieurs réplicas.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    command: ["pnpm", "exec", "prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/nextjs_starter_kit
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      # Dans le réseau Docker, les autres services sont joignables par leur nom
+      # (pas `localhost`, qui désignerait le conteneur `app` lui-même) —
+      # surcharge les valeurs de `.env` prévues pour un usage hors Docker
+      # (`pnpm dev` local).
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/nextjs_starter_kit
+      S3_ENDPOINT: http://minio:9000
+    ports:
+      - "3000:3000"
+
+  # Reverse proxy TLS + en-têtes de sécurité pour un déploiement de production
+  # (ITEM-064, critère 3) — absent du flux de développement local courant
+  # (`pnpm dev` ou `app` ci-dessus, accédés directement) : `docker compose
+  # --profile production up` pour l'inclure. Voir nginx/README.md pour la
+  # génération des certificats.
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    profiles: ["production"]
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+
+  # Alternative à `nginx` pour le domaine personnalisé par organisation
+  # (White Label, ITEM-068) — TLS provisionné automatiquement par domaine
+  # (Let's Encrypt à la demande), contrairement à `nginx` qui sert un seul
+  # domaine avec un certificat monté à la main. Profil distinct et mutuellement
+  # exclusif avec `nginx` (les deux écoutent sur 80/443) — voir caddy/README.md.
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    profiles: ["white-label"]
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  postgres_data:
+  minio_data:
+  caddy_data:
+  caddy_config:

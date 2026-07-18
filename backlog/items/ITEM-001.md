@@ -1,13 +1,13 @@
 ---
 id: ITEM-001
 title: Mettre en place la fondation d'authentification (Better Auth + Prisma)
-status: todo
+status: implemented
 priority: P0
 type: feature
 estimate: M
 depends_on: []
 created: 2026-07-04
-updated: 2026-07-04
+updated: 2026-07-15
 ---
 
 ## Idée / contexte
@@ -22,12 +22,12 @@ afin que les écrans et flux (login, register, reset, invitation) reposent sur u
 base commune sécurisée.
 
 ## Critères d'acceptation
-- [ ] Better Auth est installé et configuré avec l'adapter Prisma (email/password activé).
-- [ ] Le schéma Prisma contient les modèles requis (User, Session, Account, Verification) et migre sans erreur (`prisma migrate`).
-- [ ] Un client auth serveur (`lib/auth.ts`) et un client navigateur (`lib/auth-client.ts`) sont exposés.
-- [ ] Le route handler `app/api/auth/[...all]/route.ts` répond (GET/POST) sans erreur 500.
-- [ ] Les variables d'env nécessaires (`BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`) sont documentées dans `.env` / README.
-- [ ] Une session peut être créée et lue côté serveur (helper `getSession()` réutilisable).
+- [x] Better Auth est installé et configuré avec l'adapter Prisma (email/password activé).
+- [x] Le schéma Prisma contient les modèles requis (User, Session, Account, Verification) et migre sans erreur (`prisma migrate`).
+- [x] Un client auth serveur (`lib/auth.ts`) et un client navigateur (`lib/auth-client.ts`) sont exposés.
+- [x] Le route handler `app/api/auth/[...all]/route.ts` répond (GET/POST) sans erreur 500.
+- [x] Les variables d'env nécessaires (`BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`) sont documentées dans `.env` / `.env.example`.
+- [x] Une session peut être créée et lue côté serveur (helper `getSession()` réutilisable, `lib/auth.ts`).
 
 ## Notes techniques
 - Fichiers : `lib/auth.ts`, `lib/auth-client.ts`, `app/api/auth/[...all]/route.ts`, `prisma/schema.prisma`.
@@ -39,3 +39,5 @@ Migration Prisma réussie en terminal ; réponse 200 sur une route auth ; tables
 
 ## Journal
 - 2026-07-04 (backlog) — créé
+- 2026-07-15 (implement) — démarrage
+- 2026-07-15 (implement) — statut corrigé en `implemented` : code déjà en place (lib/auth.ts, lib/auth-client.ts, app/api/auth/[...all]/route.ts, migration Prisma, .env.example). Fichiers vérifiés, aucun changement de code nécessaire.

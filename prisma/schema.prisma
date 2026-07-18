@@ -10,3 +10,697 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model User {
+  id                      String                   @id
+  name                    String
+  email                   String
+  emailVerified           Boolean                  @default(false)
+  image                   String?
+  /// Additional field Better Auth (ITEM-045) — modifiable via `authClient.updateUser`.
+  phone                   String?
+  /// Additional field Better Auth (ITEM-045) — modifiable via `authClient.updateUser`.
+  bio                     String?
+  /// Clé S3 de l'avatar courant (ITEM-045, lib/storage.ts) — `image` pointe vers
+  /// `/api/profile/avatar` (redirection vers une URL signée) plutôt que vers cette
+  /// clé directement, jamais de bucket public.
+  avatarStorageKey        String?
+  /// Additional field du plugin Better Auth `twoFactor` (ITEM-046) — géré par le
+  /// plugin, jamais modifié directement.
+  twoFactorEnabled        Boolean                  @default(false)
+  disabledAt              DateTime?
+  /// Rôle système global ("user" | "superadmin", ITEM-050) — géré par le plugin
+  /// Better Auth `admin` (`adminRoles: ["superadmin"]`), distinct du rôle
+  /// `Membership.role`/`Role.key` scoped à une organisation. Jamais attribuable
+  /// depuis l'UI d'une organisation cliente (admin/users limite à user/admin).
+  role                    String                   @default("user")
+  /// Additional fields du plugin Better Auth `admin` (ITEM-050) — suspension de
+  /// compte par un super-admin (`auth.api.banUser`/`unbanUser`), jamais modifiés
+  /// directement.
+  banned                  Boolean                  @default(false)
+  banReason               String?
+  banExpires              DateTime?
+  /// Client Stripe rattaché à cet utilisateur en tant qu'owner (ITEM-094,
+  /// migré depuis `Organization.stripeCustomerId` — la facturation est
+  /// désormais par owner, pas par organisation), créé au premier paiement.
+  stripeCustomerId        String?                  @unique
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  sessions                Session[]
+  accounts                Account[]
+  memberships             Membership[]
+  /// Au plus un abonnement par owner (ITEM-094) — couvre toutes les
+  /// organisations dont cet utilisateur est `owner` (ITEM-093).
+  subscription            Subscription?
+  documents               Document[]
+  documentVersions        DocumentVersion[]
+  documentShares          DocumentShare[]
+  notifications           Notification[]
+  pushTokens              PushToken[]
+  notificationPreferences NotificationPreference[]
+  conversations           Conversation[]
+  twoFactors              TwoFactor[]
+  apiKeys                 ApiKey[]
+  webhooks                Webhook[]
+  ssoProviders            SsoProvider[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Organization {
+  id                 String                    @id @default(cuid())
+  name               String
+  slug               String                    @unique
+  /// Redirige vers `/api/organizations/[id]/logo` (URL signée temporaire,
+  /// ITEM-075) plutôt que de pointer directement vers le stockage — même
+  /// principe que `User.image`/`avatarStorageKey` (ITEM-045). `null` = pas de
+  /// logo (icône générique dans `OrgSwitcher`).
+  logo               String?
+  /// Clé S3 du logo courant (ITEM-075, lib/storage.ts) — jamais de bucket public.
+  logoStorageKey     String?
+  /// Couleur primaire de marque (hex `#rrggbb`), surchargeant `--primary` en
+  /// interface (ITEM-049) — `null` = thème shadcn par défaut inchangé.
+  primaryColor       String?
+  /// Rôle attribué automatiquement à un utilisateur provisionné via SSO
+  /// (ITEM-065) — "owner" volontairement exclu (jamais un rôle par défaut).
+  ssoDefaultRole     String                    @default("member")
+  /// Si vrai, la connexion par mot de passe est refusée pour les membres de
+  /// cette organisation (ITEM-065, critère 3) — seule la connexion SSO reste
+  /// possible. Défaut à `false` : la connexion par mot de passe reste
+  /// disponible par défaut même si un fournisseur SSO est configuré (les deux
+  /// coexistent tant que ce champ n'est pas explicitement activé).
+  ssoEnforced        Boolean                   @default(false)
+  /// Domaine personnalisé (White Label, ITEM-068) — l'organisation est
+  /// résolue depuis le `Host` de la requête (`proxy.ts`) quand il correspond
+  /// à cette valeur, plutôt que depuis le cookie d'organisation active.
+  /// Nullable/unique : la plupart des organisations n'en configurent aucun.
+  customDomain       String?                   @unique
+  /// Police surchargeant `--font-sans` en interface (White Label, ITEM-069) —
+  /// valeur `font-family` CSS libre (ex. `"Georgia, serif"`). `null` = police
+  /// par défaut inchangée.
+  fontFamily         String?
+  /// URL du favicon personnalisé (White Label, ITEM-069). `null` = favicon
+  /// par défaut de la plateforme.
+  favicon            String?
+  /// Nom d'expéditeur affiché sur les e-mails transactionnels envoyés au nom
+  /// de cette organisation (White Label, ITEM-069, ex. "Acme Support") —
+  /// l'adresse d'envoi elle-même reste celle de la plateforme (`EMAIL_FROM`) :
+  /// personnaliser l'adresse exigerait une vérification de domaine d'envoi
+  /// (SPF/DKIM), hors périmètre de cet item. `null` = expéditeur par défaut.
+  emailFromName      String?
+  /// Masque les mentions de la marque d'origine de la plateforme (nom de
+  /// page par défaut, White Label, ITEM-069) — réservé aux organisations sur
+  /// le plan White Label (`isWhiteLabelOrganization()`, `lib/billing.ts`),
+  /// vérifié côté serveur à l'écriture, pas seulement à la lecture.
+  hideOriginBranding Boolean                   @default(false)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  memberships        Membership[]
+  invitations        Invitation[]
+  roles              Role[]
+  auditLogs          AuditLog[]
+  folders            Folder[]
+  documents          Document[]
+  aiUsageLogs        AiUsageLog[]
+  apiKeys            ApiKey[]
+  webhooks           Webhook[]
+  featureFlags       OrganizationFeatureFlag[]
+  ssoProviders       SsoProvider[]
+
+  @@map("organization")
+}
+
+/// Catalogue des feature flags disponibles (ITEM-052) — définis par le code
+/// (seed), activés/désactivés par organisation via `OrganizationFeatureFlag`.
+model FeatureFlag {
+  key               String                    @id
+  description       String
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  organizationFlags OrganizationFeatureFlag[]
+
+  @@map("feature_flag")
+}
+
+/// Activation d'un `FeatureFlag` pour une organisation donnée (ITEM-052).
+/// Absence de ligne = flag désactivé (opt-in explicite par le super-admin,
+/// jamais activé par défaut) — voir `lib/feature-flags.ts#isFeatureEnabled`.
+model OrganizationFeatureFlag {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  key            String
+  featureFlag    FeatureFlag  @relation(fields: [key], references: [key], onDelete: Cascade)
+  enabled        Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, key])
+  @@index([organizationId])
+  @@index([key])
+  @@map("organization_feature_flag")
+}
+
+model Role {
+  id             String           @id @default(cuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Correspond à `Membership.role` ("owner" | "admin" | "member") dans cette organisation.
+  key            String
+  name           String
+  /// Rôle système (seedé à la création de l'organisation) — non supprimable.
+  isSystem       Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  permissions    RolePermission[]
+
+  @@unique([organizationId, key])
+  @@index([organizationId])
+  @@map("role")
+}
+
+model Permission {
+  id       String           @id @default(cuid())
+  resource String
+  action   String
+  roles    RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permission")
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permission")
+}
+
+/// Fondation minimale pour ITEM-019 (traçabilité des changements de rôles) —
+/// append-only ; page de consultation, filtres et export : périmètre d'ITEM-051.
+model AuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Pas de relation Prisma vers User : l'entrée d'audit doit survivre même si
+  /// le compte de l'auteur est supprimé plus tard.
+  actorId        String
+  action         String
+  targetType     String
+  targetId       String
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@index([actorId])
+  @@map("audit_log")
+}
+
+model Membership {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  role           String       @default("member") // owner | admin | manager | member
+  status         String       @default("active") // active | removed
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@map("membership")
+}
+
+model Session {
+  id             String   @id
+  expiresAt      DateTime
+  token          String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  ipAddress      String?
+  userAgent      String?
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Additional field du plugin Better Auth `admin` (ITEM-050) — id du super-admin
+  /// à l'origine de cette session d'impersonation, `null` pour une session normale.
+  impersonatedBy String?
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+/// Table du plugin Better Auth `twoFactor` (ITEM-046) — schéma imposé par le
+/// plugin (secret TOTP + codes de secours chiffrés), au plus une ligne par
+/// utilisateur (le plugin supprime l'ancienne avant d'en recréer une).
+model TwoFactor {
+  id                      String    @id
+  userId                  String
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  secret                  String
+  backupCodes             String
+  verified                Boolean   @default(true)
+  failedVerificationCount Int       @default(0)
+  lockedUntil             DateTime?
+
+  @@index([userId])
+  @@map("two_factor")
+}
+
+/// Fournisseur SSO SAML/OIDC (ITEM-065, plugin officiel `@better-auth/sso`) —
+/// forme des champs dictée par le plugin lui-même (`src/index.ts#schema`,
+/// package `@better-auth/sso`), pas par convention de ce repo : `id` sans
+/// `@default` (généré par Better Auth, pas Prisma), pas de
+/// `createdAt`/`updatedAt` (absents du schéma déclaré par le plugin).
+model SsoProvider {
+  id             String        @id
+  issuer         String
+  /// JSON sérialisé (OIDCConfig du plugin) — jamais lu/modifié directement par ce repo, uniquement par le plugin.
+  oidcConfig     String?
+  /// JSON sérialisé (SAMLConfig du plugin).
+  samlConfig     String?
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerId     String        @unique
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  domain         String
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([domain])
+  @@map("sso_provider")
+}
+
+model Invitation {
+  id             String       @id @default(cuid())
+  email          String
+  role           String       @default("user")
+  token          String       @unique
+  status         String       @default("pending") // pending | accepted | revoked
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([email])
+  @@index([organizationId])
+  @@map("invitation")
+}
+
+model Plan {
+  id                 String         @id @default(cuid())
+  name               String
+  /// Montant en plus petite unité monétaire (centimes) pour éviter les flottants.
+  price              Int
+  currency           String         @default("usd")
+  interval           String // month | year
+  features           Json
+  /// Limite de l'API publique v1 (ITEM-053) accordée aux clés API de ce plan —
+  /// fenêtre glissante d'une minute (ITEM-054).
+  rateLimitPerMinute Int            @default(60)
+  isActive           Boolean        @default(true)
+  stripePriceId      String?        @unique
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  subscriptions      Subscription[]
+
+  @@map("plan")
+}
+
+/// ownerId est unique : un utilisateur n'a jamais plus d'un abonnement
+/// (changement de plan = mise à jour de cette ligne), ce qui garantit "au plus un
+/// abonnement actif à la fois" sans index partiel. Couvre toutes les
+/// organisations dont cet utilisateur est `owner` (ITEM-094, migré depuis
+/// `organizationId` — la facturation est désormais par owner, pas par
+/// organisation ; voir ITEM-093 pour la limite du nombre d'organisations
+/// couvertes par ce même abonnement).
+model Subscription {
+  id                   String    @id @default(cuid())
+  ownerId              String    @unique
+  owner                User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  /// Nullable : un essai (ITEM-024) démarre sans plan choisi.
+  planId               String?
+  plan                 Plan?     @relation(fields: [planId], references: [id])
+  status               String    @default("active") // active | trialing | past_due | canceled | expired
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean   @default(false)
+  stripeSubscriptionId String?   @unique
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  invoices             Invoice[]
+
+  @@index([planId])
+  @@map("subscription")
+}
+
+model Invoice {
+  id              String       @id @default(cuid())
+  subscriptionId  String
+  subscription    Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  /// Montant en plus petite unité monétaire (centimes).
+  amount          Int
+  currency        String       @default("usd")
+  status          String       @default("open") // draft | open | paid | void | uncollectible
+  stripeInvoiceId String?      @unique
+  /// `invoice.invoice_pdf` Stripe — lien de téléchargement direct (ITEM-023).
+  invoicePdfUrl   String?
+  issuedAt        DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([subscriptionId])
+  @@map("invoice")
+}
+
+model Folder {
+  id             String       @id @default(cuid())
+  name           String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parentId       String?
+  parent         Folder?      @relation("FolderChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children       Folder[]     @relation("FolderChildren")
+  documents      Document[]
+  /// Suppression douce (ITEM-029 : dossier supprimé avec son contenu ; corbeille/
+  /// restauration/purge = ITEM-032). `null` = visible.
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([parentId])
+  @@index([deletedAt])
+  @@map("folder")
+}
+
+model Document {
+  id               String            @id @default(cuid())
+  name             String
+  /// Taille en octets.
+  size             Int
+  mimeType         String
+  /// Clé S3 (lib/storage.ts, ITEM-027) — jamais d'URL publique stockée, uniquement
+  /// des URLs signées générées à la demande.
+  storageKey       String            @unique
+  organizationId   String
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  folderId         String?
+  folder           Folder?           @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  /// Nullable : le document reste si le compte de l'auteur est supprimé.
+  uploadedById     String?
+  uploadedBy       User?             @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  /// Suppression douce — voir `Folder.deletedAt` (héritée d'une suppression de
+  /// dossier parent, ITEM-029 ; corbeille/restauration/purge = ITEM-032).
+  deletedAt        DateTime?
+  /// Historique des versions (ITEM-031) — `size`/`mimeType`/`storageKey` ci-dessus
+  /// reflètent toujours la version courante (dénormalisé pour ne pas changer les
+  /// lectures existantes de la liste de documents).
+  versions         DocumentVersion[]
+  /// Liens de partage externes (ITEM-033).
+  shares           DocumentShare[]
+  /// Texte extrait par OCR (ITEM-042, `lib/ai.ts`) — `null` tant qu'aucune
+  /// extraction n'a été lancée. Fondation pour la recherche plein texte
+  /// (ITEM-034 V2, pas encore branchée sur ce champ).
+  ocrText          String?
+  ocrProcessedAt   DateTime?
+  /// Résumé structuré généré par IA (ITEM-043, `lib/ai.ts`) — mis en cache ici :
+  /// une ouverture du panneau de résumé ne régénère pas si déjà présent
+  /// (l'utilisateur régénère explicitement via l'action dédiée).
+  summary          String?
+  summaryUpdatedAt DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([organizationId])
+  @@index([folderId])
+  @@index([deletedAt])
+  @@map("document")
+}
+
+/// Historique des versions d'un document (ITEM-031). Chaque upload — initial ou en
+/// remplacement d'un document existant (même nom, même dossier) — crée une ligne ici ;
+/// `Document.storageKey/size/mimeType` reflète toujours la dernière. Une restauration
+/// ne crée pas de nouvelle version : elle repointe `Document` vers la version choisie
+/// (le fichier restauré redevient "actuel" par comparaison de `storageKey`).
+model DocumentVersion {
+  id            String   @id @default(cuid())
+  documentId    String
+  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  /// Taille en octets.
+  size          Int
+  mimeType      String
+  /// Clé S3 de cette version — jamais réutilisée/écrasée, même après restauration
+  /// d'une version antérieure (lib/storage.ts, ITEM-027).
+  storageKey    String   @unique
+  createdAt     DateTime @default(now())
+  /// Nullable : la version reste si le compte de l'auteur est supprimé.
+  createdById   String?
+  createdBy     User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([documentId, versionNumber])
+  @@index([documentId])
+  @@map("document_version")
+}
+
+/// Lien de partage externe d'un document (ITEM-033). `token` est le seul secret :
+/// donne accès à `document` sans session (`visibility: "public"`) ou en exigeant
+/// une session appartenant à un membre actif de l'organisation du document
+/// (`"restricted"` — pas d'infrastructure d'invitation d'e-mails externes dans ce
+/// repo, la "invitation" réutilise le système d'adhésion existant). Révocation par
+/// `revokedAt` plutôt qu'une suppression, pour garder une trace des liens émis.
+model DocumentShare {
+  id          String    @id @default(cuid())
+  documentId  String
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  token       String    @unique
+  /// "view" | "comment" — les commentaires ne sont pas encore implémentés
+  /// (aucun modèle `Comment` dans ce repo) : un lien "comment" reste en
+  /// lecture seule côté page publique, avec une mention explicite du manque.
+  accessLevel String    @default("view")
+  /// "public" (aucune session requise) | "restricted" (membre actif de
+  /// l'organisation du document).
+  visibility  String    @default("restricted")
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  /// Nullable : le lien reste si le compte de l'auteur est supprimé.
+  createdById String?
+  createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([documentId])
+  @@map("document_share")
+}
+
+/// Fil de notifications in-app d'un utilisateur (ITEM-035), indépendant de
+/// l'organisation active : un utilisateur garde ses notifications en changeant
+/// d'organisation. `readAt` nul = non lue (même convention que `Folder.deletedAt`).
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "document_shared" | "invitation_received" | ... — voir lib/notifications.ts.
+  type      String
+  title     String
+  body      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([userId, readAt])
+  @@map("notification")
+}
+
+/// Token d'appareil Firebase Cloud Messaging (ITEM-036), un par appareil/navigateur
+/// enregistré. `token` unique tous utilisateurs confondus : FCM peut réémettre le
+/// même token pour un navigateur après reconnexion sous un autre compte, d'où
+/// l'upsert par token (voir lib/push-notifications.ts) plutôt que par utilisateur.
+model PushToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("push_token")
+}
+
+/// Préférence de notification d'un utilisateur (ITEM-038), par catégorie
+/// d'évènement (`NotificationCategory`, lib/notification-templates.ts) et par
+/// canal. Absence de ligne = activé par défaut (opt-out) ; les catégories
+/// `critical` (lib/notification-templates.ts) ignorent ces préférences
+/// (voir lib/notification-preferences.ts#isChannelEnabled).
+model NotificationPreference {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category  String
+  /// "email" | "push" | "inApp"
+  channel   String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, category, channel])
+  @@index([userId])
+  @@map("notification_preference")
+}
+
+/// Journal de consommation IA (ITEM-039), append-only — un enregistrement par
+/// appel à `lib/ai.ts#generateText`. Fondation pour un futur quota lié au plan
+/// de facturation (ITEM-020) ; pas encore de page de consultation dédiée
+/// (même statut que `AuditLog` avant ITEM-051).
+model AiUsageLog {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  model              String
+  inputTokens        Int
+  outputTokens       Int
+  /// Coût estimé en centimes de dollar, à partir d'une table de prix
+  /// indicative (lib/ai.ts) — jamais utilisé pour la facturation réelle.
+  estimatedCostCents Int
+  createdAt          DateTime     @default(now())
+
+  @@index([organizationId])
+  @@map("ai_usage_log")
+}
+
+/// Clé API d'organisation (ITEM-047), pour l'intégration externe (API publique,
+/// ITEM-053). Stockée hashée — jamais en clair, même principe que les mots de
+/// passe : seul `prefix` (quelques caractères) reste affichable après création.
+model ApiKey {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  /// Portion visible affichée dans la liste (ex. "sk_live_a1b2c3d4…").
+  prefix         String
+  /// SHA-256 de la clé complète.
+  hashedKey      String       @unique
+  /// Nullable : la clé reste si le compte de l'auteur est supprimé.
+  createdById    String?
+  createdBy      User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  lastUsedAt     DateTime?
+  /// `null` = active. Révocation immédiate : `lib/api-keys.ts#verifyApiKey`
+  /// rejette toute clé dont `revokedAt` est renseigné.
+  revokedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@map("api_key")
+}
+
+/// Webhook sortant d'organisation (ITEM-048) — voir lib/webhooks.ts pour le
+/// catalogue d'événements et la logique d'envoi/signature.
+model Webhook {
+  id             String            @id @default(cuid())
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  url            String
+  /// Secret HMAC en clair (pas hashé, à l'inverse d'`ApiKey`) : contrairement à
+  /// une clé API (identifiant présenté par l'appelant), ce secret est utilisé
+  /// activement par NOTRE serveur pour signer chaque envoi — il doit donc
+  /// rester lisible, pas seulement vérifiable.
+  secret         String
+  /// Types d'événements souscrits — voir `WEBHOOK_EVENT_TYPES` (lib/webhooks.ts).
+  events         String[]
+  enabled        Boolean           @default(true)
+  /// Nullable : le webhook reste si le compte de l'auteur est supprimé.
+  createdById    String?
+  createdBy      User?             @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  deliveries     WebhookDelivery[]
+
+  @@index([organizationId])
+  @@map("webhook")
+}
+
+/// Journal des envois d'un webhook (ITEM-048) — un renvoi manuel crée une
+/// nouvelle ligne plutôt que d'écraser l'échec initial, pour garder l'historique.
+model WebhookDelivery {
+  id           String   @id @default(cuid())
+  webhookId    String
+  webhook      Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  event        String
+  payload      Json
+  statusCode   Int?
+  success      Boolean  @default(false)
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  @@index([webhookId])
+  @@map("webhook_delivery")
+}
+
+/// Fil de discussion IA d'un utilisateur (ITEM-040), sur la fondation ITEM-039.
+/// Un seul fil par utilisateur pour cette passe (pas de sélecteur multi-
+/// conversations) — créé à la volée au premier message.
+model Conversation {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  messages  ChatMessage[]
+
+  @@index([userId])
+  @@map("ai_conversation")
+}
+
+model ChatMessage {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// "user" | "assistant"
+  role           String
+  content        String
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+  @@map("ai_chat_message")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}

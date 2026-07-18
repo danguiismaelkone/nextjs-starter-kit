@@ -1,0 +1,43 @@
+# Reverse proxy alternatif pour le White Label (ITEM-068) — contrairement à
+# `nginx/nginx.conf` (ITEM-064, un seul domaine, certificat monté manuellement),
+# ce fichier gère un nombre arbitraire de domaines clients ajoutés à chaud
+# depuis `/settings/organizations/[id]/domain`, sans redéploiement : Caddy
+# demande et renouvelle automatiquement un certificat Let's Encrypt pour
+# CHAQUE hostname vu pour la première fois, à condition que
+# `on_demand_tls.ask` réponde 200 — voir `app/api/domains/verify/route.ts`,
+# qui ne répond 200 que pour un domaine réellement configuré comme
+# `Organization.customDomain`. Sert la plateforme entière (pas seulement les
+# domaines personnalisés) : les en-têtes de sécurité applicatifs (CSP,
+# X-Frame-Options...) restent posés par Next.js lui-même (next.config.ts,
+# ITEM-055), pas dupliqués ici.
+{
+	# `interval`/`burst` (pas un sous-bloc `rate_limit`, rejeté par l'adaptateur
+	# Caddyfile de la version épinglée ci-dessous malgré l'avertissement de
+	# dépréciation à la validation) — limite le taux de demandes de certificats
+	# par domaine, en plus du filtre `ask` lui-même.
+	on_demand_tls {
+		ask http://app:3000/api/domains/verify
+		interval 2m
+		burst 5
+	}
+}
+
+:80 {
+	redir https://{host}{uri} permanent
+}
+
+:443 {
+	tls {
+		on_demand
+	}
+
+	# HSTS : n'a de sens qu'ici (après terminaison TLS), jamais posé par
+	# l'application elle-même qui ne sait pas si elle est servie derrière TLS.
+	header Strict-Transport-Security "max-age=63072000; includeSubDomains"
+
+	request_body {
+		max_size 25MB
+	}
+
+	reverse_proxy app:3000
+}

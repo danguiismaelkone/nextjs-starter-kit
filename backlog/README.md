@@ -28,3 +28,22 @@ cocher les critères, mettre à jour `status`/`updated` et ajouter une ligne au 
 - Auth : **Better Auth** (sessions, email/password, plugins reset & invitation).
 - Modèle d'accès : **self-service + invitations**, rôles simples `user` / `admin`.
 - E-mail : **Resend** (invitations + liens de réinitialisation).
+
+## Cadrage SaaS Core (2026-07-16)
+Ce projet évolue vers un **SaaS Core réutilisable** (base commune pour de futurs
+produits SaaS). Décisions structurantes prises au cadrage :
+- **Multi-tenant** : le socle mono-tenant existant (ITEM-001 à 012) migre vers un
+  modèle `Organization` + `Membership` (voir épic A, ITEM-013). Toute nouvelle donnée
+  scoped-utilisateur doit être pensée scoped-organisation dès sa conception.
+- **Périmètre** : backlog couvrant tout le roadmap cible dès cette passe (MVP → V1 →
+  V2 → V3 → Enterprise → IA → White Label), voir la table Roadmap dans `index.md`.
+  Certains items avancés (IA, Enterprise, White Label) resteront à affiner une fois
+  leurs dépendances livrées.
+- **Stack ajoutée** : Stripe (billing), stockage S3-compatible (MinIO/R2/S3, documents),
+  Firebase (notifications push), Docker/Nginx (déploiement).
+- **Modules FATIHOUNE** : le registre `~/.claude/modules/_registry.json` couvre une
+  bonne partie de ces épics (`multi-tenant`, `billing`, `roles-permissions`,
+  `notifications`, `upload`, `user-profile`, `user-settings`, `superadmin`,
+  `datatable`, `theme-config`). Les items concernés le mentionnent dans leurs Notes
+  techniques ; à l'implémentation, adapter ces modules à l'existant (Better Auth
+  custom déjà en place) plutôt que les installer en écrasant le code livré.

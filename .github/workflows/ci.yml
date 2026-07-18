@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+# Annule les runs en cours d'une même PR/branche dès qu'un nouveau push arrive —
+# évite de gaspiller des minutes CI sur un état déjà obsolète.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Lint, typecheck, tests, build
+    runs-on: ubuntu-latest
+
+    # Base Postgres éphémère (ITEM-059) — même image que docker-compose.yml, pour
+    # que `prisma generate`/`migrate deploy`/le build reflètent un schéma
+    # réellement appliqué plutôt qu'une DATABASE_URL fictive.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: nextjs_starter_kit_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nextjs_starter_kit_ci
+      BETTER_AUTH_URL: http://localhost:3000
+      EMAIL_FROM: onboarding@resend.dev
+      # Secrets réels du projet (Stripe, Resend, Firebase, S3, IA) — jamais commis,
+      # injectés depuis les "Repository secrets" GitHub (Settings > Secrets and
+      # variables > Actions). Absents ici (chaîne vide) : les clients paresseux de
+      # l'app (`getStripeClient()`, `getResendClient()`, etc.) dégradent
+      # proprement plutôt que de faire échouer le build ou les tests unitaires,
+      # qui ne font aucun appel réseau réel vers ces services (ITEM-057 : Prisma/
+      # Stripe/webhooks mockés).
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+      S3_REGION: auto
+      S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+      S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+      FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+      FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+      FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Installer les dépendances
+        run: pnpm install --frozen-lockfile
+
+      # BETTER_AUTH_SECRET n'a besoin d'être stable qu'au sein d'un même run (pas
+      # de session à faire persister entre exécutions CI) — généré à la volée
+      # plutôt que stocké comme secret du repo, pour ne rien avoir à gérer en plus.
+      - name: Générer un secret Better Auth éphémère
+        run: echo "BETTER_AUTH_SECRET=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
+      - name: Générer le client Prisma
+        run: pnpm exec prisma generate
+
+      - name: Appliquer les migrations
+        run: pnpm exec prisma migrate deploy
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Vérification des types
+        run: pnpm exec tsc --noEmit
+
+      - name: Tests unitaires
+        run: pnpm test
+
+      - name: Build de production
+        run: pnpm build
